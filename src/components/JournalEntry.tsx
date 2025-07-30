@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Send } from "lucide-react";
+import { useGemini } from "@/hooks/use-gemini";
 
 interface JournalEntryProps {
   onEntrySubmitted: () => void;
@@ -21,6 +22,7 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
   const [aiResponse, setAiResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { generateJournalAnswer } = useGemini();
 
   const handleSubmit = async () => {
     if (!userInput.trim()) {
@@ -35,25 +37,24 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
     setIsLoading(true);
 
     try {
-      // For now, simulate AI response until API key is configured
-      const mockResponse = `Thank you for sharing your thoughts. Your reflection shows ${userInput.length > 100 ? 'deep' : 'thoughtful'} consideration. Remember that every feeling is valid, and taking time to journal is a beautiful act of self-care. ${userInput.toLowerCase().includes('grateful') || userInput.toLowerCase().includes('thankful') ? 'Your gratitude shines through your words.' : 'Consider what you might be grateful for today.'} Keep nurturing this mindful practice. 🌱`;
+      const response = await generateJournalAnswer(userInput);
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      setAiResponse(mockResponse);
+      setAiResponse(response);
 
-      // Save to localStorage
       const entry: JournalEntry = {
         id: Date.now().toString(),
         userInput: userInput.trim(),
-        aiResponse: mockResponse,
+        aiResponse: response,
         timestamp: new Date().toISOString(),
       };
 
-      const existingEntries = JSON.parse(localStorage.getItem('journalEntries') || '[]');
+      const existingEntries = JSON.parse(
+        localStorage.getItem("journalEntries") || "[]"
+      );
       const updatedEntries = [entry, ...existingEntries];
-      localStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
+      localStorage.setItem("journalEntries", JSON.stringify(updatedEntries));
 
       onEntrySubmitted();
 
@@ -61,9 +62,8 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
         title: "Reflection saved",
         description: "Your journal entry has been saved with AI insights.",
       });
-
     } catch (error) {
-      console.error('Error getting AI response:', error);
+      console.error("Error getting AI response:", error);
       toast({
         title: "Something went wrong",
         description: "Please try again later.",
@@ -139,7 +139,9 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-accent-foreground leading-relaxed">{aiResponse}</p>
+            <p className="text-accent-foreground leading-relaxed">
+              {aiResponse}
+            </p>
           </CardContent>
         </Card>
       )}

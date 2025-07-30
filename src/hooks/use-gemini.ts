@@ -15,7 +15,7 @@ export const useGemini = () => {
     initializeGemini(import.meta.env.VITE_GEMINI_API_KEY);
   }, []);
 
-  const generateMysticalAnswer = async (question: string): Promise<string> => {
+  const generateJournalAnswer = async (question: string): Promise<string> => {
     if (!model) {
       throw new Error("Gemini client not initialized");
     }
@@ -54,6 +54,6 @@ export const useGemini = () => {
   };
 
   return {
-    generateMysticalAnswer,
+    generateJournalAnswer,
   };
 };
