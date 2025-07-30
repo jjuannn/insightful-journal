@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Navigation } from "@/components/Navigation";
 import { Book, Calendar, Sparkles, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Session, User } from "@supabase/supabase-js";
 
 interface JournalEntry {
   id: string;
@@ -14,11 +17,34 @@ interface JournalEntry {
 
 export default function MyJournal() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    loadEntries();
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadEntries();
+    }
+  }, [user]);
 
   const loadEntries = () => {
     const savedEntries = JSON.parse(localStorage.getItem('journalEntries') || '[]');
@@ -47,6 +73,34 @@ export default function MyJournal() {
       minute: '2-digit',
     });
   };
+
+  // Redirect to auth if not logged in
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-journal-bg">
+        <Navigation />
+        
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="text-center animate-fade-in">
+            <Book className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              Sign in to view your journal
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Please sign in to access your personal journal entries.
+            </p>
+            <Button 
+              variant="journal" 
+              onClick={() => navigate('/auth')}
+              className="animate-gentle-bounce"
+            >
+              Sign In
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-journal-bg">
