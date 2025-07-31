@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      journal_entries: {
+        Row: {
+          id: string;
+          user_id: string;
+          user_input: string;
+          ai_response: string;
+          timestamp: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          user_input: string;
+          ai_response: string;
+          timestamp?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          user_input?: string;
+          ai_response?: string;
+          timestamp?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       [_ in never]: never
     }
     Views: {
