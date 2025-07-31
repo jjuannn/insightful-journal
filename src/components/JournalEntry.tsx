@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Send } from "lucide-react";
 import { useGemini } from "@/hooks/use-gemini";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface JournalEntryProps {
   onEntrySubmitted: () => void;
@@ -23,6 +25,7 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { generateJournalAnswer } = useGemini();
+  const navigate = useNavigate();
 
   const handleSubmit = async () => {
     if (!userInput.trim()) {
@@ -43,18 +46,32 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
 
       setAiResponse(response);
 
-      const entry: JournalEntry = {
-        id: Date.now().toString(),
-        userInput: userInput.trim(),
-        aiResponse: response,
-        timestamp: new Date().toISOString(),
-      };
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      const existingEntries = JSON.parse(
-        localStorage.getItem("journalEntries") || "[]"
-      );
-      const updatedEntries = [entry, ...existingEntries];
-      localStorage.setItem("journalEntries", JSON.stringify(updatedEntries));
+      if (!user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in to save your journal entry.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.from("journal_entries").insert([
+        {
+          user_id: user.id,
+          user_input: userInput.trim(),
+          ai_response: response,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        throw error;
+      }
 
       onEntrySubmitted();
 
@@ -62,11 +79,12 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
         title: "Reflection saved",
         description: "Your journal entry has been saved with AI insights.",
       });
+      navigate("/my-journal");
     } catch (error) {
-      console.error("Error getting AI response:", error);
+      console.error("Error saving journal entry:", error);
       toast({
         title: "Something went wrong",
-        description: "Please try again later.",
+        description: "Failed to save journal entry. Please try again later.",
         variant: "destructive",
       });
     } finally {
@@ -116,35 +134,9 @@ export const JournalEntry = ({ onEntrySubmitted }: JournalEntryProps) => {
                 </>
               )}
             </Button>
-            {aiResponse && (
-              <Button
-                onClick={handleNewEntry}
-                variant="gentle"
-                size="lg"
-                className="animate-fade-in"
-              >
-                New Entry
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>
-
-      {aiResponse && (
-        <Card className="border-border/50 shadow-gentle bg-accent/30 backdrop-blur-sm animate-fade-in">
-          <CardHeader>
-            <CardTitle className="text-lg font-medium text-accent-foreground flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              AI Reflection
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-accent-foreground leading-relaxed">
-              {aiResponse}
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };

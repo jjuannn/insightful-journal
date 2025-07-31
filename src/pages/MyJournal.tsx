@@ -10,8 +10,9 @@ import { Session, User } from "@supabase/supabase-js";
 
 interface JournalEntry {
   id: string;
-  userInput: string;
-  aiResponse: string;
+  user_id: string;
+  user_input: string;
+  ai_response: string;
   timestamp: string;
 }
 
@@ -19,19 +20,23 @@ export default function MyJournal() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "SIGNED_IN") {
         setSession(session);
         setUser(session?.user ?? null);
+        return;
       }
-    );
 
-    // Check for existing session
+      return;
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -43,43 +48,81 @@ export default function MyJournal() {
   useEffect(() => {
     if (user) {
       loadEntries();
+    } else {
+      setEntries([]);
+      setIsLoading(false);
     }
   }, [user]);
 
-  const loadEntries = () => {
-    const savedEntries = JSON.parse(localStorage.getItem('journalEntries') || '[]');
-    setEntries(savedEntries);
+  const loadEntries = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("journal_entries")
+        .select("id, user_input, ai_response, timestamp, user_id")
+        .eq("user_id", user?.id)
+        .order("timestamp", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+      setEntries(data as JournalEntry[]);
+    } catch (error) {
+      console.error("Error loading journal entries:", error);
+      toast({
+        title: "Error loading entries",
+        description: "Failed to load your journal entries. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const deleteEntry = (id: string) => {
-    const updatedEntries = entries.filter(entry => entry.id !== id);
-    setEntries(updatedEntries);
-    localStorage.setItem('journalEntries', JSON.stringify(updatedEntries));
-    
-    toast({
-      title: "Entry deleted",
-      description: "Your journal entry has been removed.",
-    });
+  const deleteEntry = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("journal_entries")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        throw error;
+      }
+
+      setEntries(entries.filter((entry) => entry.id !== id));
+
+      toast({
+        title: "Entry deleted",
+        description: "Your journal entry has been removed.",
+      });
+    } catch (error) {
+      console.error("Error deleting journal entry:", error);
+      toast({
+        title: "Error deleting entry",
+        description: "Failed to delete your journal entry. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
-  // Redirect to auth if not logged in
   if (!user) {
     return (
       <div className="min-h-screen bg-journal-bg">
         <Navigation />
-        
+
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           <div className="text-center animate-fade-in">
             <Book className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -89,9 +132,9 @@ export default function MyJournal() {
             <p className="text-muted-foreground mb-6">
               Please sign in to access your personal journal entries.
             </p>
-            <Button 
-              variant="journal" 
-              onClick={() => navigate('/auth')}
+            <Button
+              variant="journal"
+              onClick={() => navigate("/auth")}
               className="animate-gentle-bounce"
             >
               Sign In
@@ -105,7 +148,6 @@ export default function MyJournal() {
   return (
     <div className="min-h-screen bg-journal-bg">
       <Navigation />
-      
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="text-center mb-8 animate-fade-in">
           <div className="flex items-center justify-center gap-3 mb-4">
@@ -116,8 +158,13 @@ export default function MyJournal() {
             Your mindful reflections and AI insights
           </p>
         </div>
-
-        {entries.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">
+              Loading your journal entries...
+            </p>
+          </div>
+        ) : entries.length === 0 ? (
           <Card className="text-center py-12 border-border/50 shadow-gentle bg-card/50 backdrop-blur-sm animate-fade-in">
             <CardContent>
               <Book className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -125,11 +172,12 @@ export default function MyJournal() {
                 No entries yet
               </h3>
               <p className="text-muted-foreground mb-6">
-                Start your mindful journaling journey by writing your first entry.
+                Start your mindful journaling journey by writing your first
+                entry.
               </p>
-              <Button 
-                variant="journal" 
-                onClick={() => window.location.href = '/'}
+              <Button
+                variant="journal"
+                onClick={() => (window.location.href = "/")}
                 className="animate-gentle-bounce"
               >
                 Write First Entry
@@ -139,8 +187,8 @@ export default function MyJournal() {
         ) : (
           <div className="space-y-6">
             {entries.map((entry, index) => (
-              <Card 
-                key={entry.id} 
+              <Card
+                key={entry.id}
                 className="border-border/50 shadow-gentle bg-card/50 backdrop-blur-sm animate-fade-in hover:shadow-soft-glow transition-all duration-300"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
@@ -168,17 +216,17 @@ export default function MyJournal() {
                       📝 Your Reflection
                     </h4>
                     <p className="text-foreground/80 leading-relaxed bg-muted/30 p-4 rounded-md">
-                      {entry.userInput}
+                      {entry.user_input}
                     </p>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <h4 className="font-medium text-accent-foreground flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-primary" />
                       AI Insight
                     </h4>
                     <p className="text-accent-foreground/80 leading-relaxed bg-accent/20 p-4 rounded-md">
-                      {entry.aiResponse}
+                      {entry.ai_response}
                     </p>
                   </div>
                 </CardContent>
